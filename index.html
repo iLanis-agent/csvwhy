@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CsvWhy - why does my CSV import break?</title>
+<meta name="description" content="Paste a CSV: see how it parses, where it breaks RFC 4180, and which line to fix.">
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:#1a1608; color:#fbf3dc; line-height:1.6; }
+  .wrap { max-width:680px; margin:0 auto; padding:48px 20px 60px; }
+  .logo { font-size:46px; font-weight:800; } .logo span { color:#fcd34d; }
+  .tag { font-size:19px; margin-top:10px; color:#ecdfb4; }
+  .cta { display:inline-block; margin-top:26px; background:#fcd34d; color:#1a1608; font-weight:700; padding:14px 30px; border-radius:12px; text-decoration:none; }
+  h2 { font-size:21px; margin:40px 0 10px; } li { color:#cdbf92; margin-bottom:8px; } ul { margin-left:20px; }
+  .demo { margin-top:26px; background:#262011; border-radius:14px; padding:18px; } .demo b { color:#fcd34d; }
+  footer { margin-top:50px; font-size:13px; color:#a8985f; } a { color:#fcd34d; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">Csv<span>Why</span></div>
+  <div class="tag">One unclosed quote can turn a whole file into a single cell.</div>
+  <a class="cta" href="app.html">Open the app</a>
+  <div class="demo">A row like <b>2,Bob,"said "hi" to me"</b> has quotes that were not doubled. The RFC does not allow it, and parsers disagree on what it means. CsvWhy shows the line and the rule: inside quotes, write <b>""</b> for each quote.</div>
+  <h2>What it does</h2>
+  <ul><li>Shows how the CSV parses, row by row, with field counts</li><li>Lists RFC 4180 problems with line numbers: stray quotes, text after a closing quote, unclosed quotes, line breaks, control characters</li><li>Flags ragged rows and blank lines, and detects semicolon, tab and pipe files</li><li>Checked against Python's csv module and the RFC grammar on thousands of random inputs</li></ul>
+  <footer>Follows RFC 4180. Static, client-side, nothing uploaded. <a href="https://github.com/iLanis-agent/csvwhy">Source</a></footer>
+</div>
+</body>
+</html>
