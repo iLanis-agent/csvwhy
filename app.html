@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CsvWhy - why does my CSV import break?</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:#1a1608; color:#fbf3dc; line-height:1.5; }
+  .wrap { max-width:720px; margin:0 auto; padding:26px 16px 50px; }
+  h1 { font-size:28px; } h1 span { color:#fcd34d; }
+  .sub { color:#cdbf92; margin:6px 0 16px; }
+  .card { background:#262011; border-radius:14px; padding:14px; margin-bottom:12px; }
+  label { font-size:12px; color:#cdbf92; display:block; margin-bottom:3px; }
+  textarea, select { width:100%; background:#1a1608; color:#fbf3dc; border:1px solid #6b5a22; border-radius:8px; padding:8px; font-size:13px; font-family:ui-monospace,Menlo,monospace; }
+  textarea { min-height:150px; margin-bottom:10px; } select { font-family:inherit; font-size:14px; padding:9px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; }
+  button { background:#a16207; color:#fbf3dc; border:0; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:14px; margin-right:6px; margin-top:8px; }
+  .muted { color:#cdbf92; font-size:13px; } .note { font-size:12.5px; color:#a8985f; margin-top:6px; } .err { color:#ff9c8a; }
+  .verdict { font-weight:800; font-size:17px; margin-bottom:6px; } .good { color:#86efac; } .bad { color:#fca5a5; }
+  .iss { border-top:1px solid #4a3e18; padding:8px 0; font-size:14px; }
+  .tag { display:inline-block; font-size:11px; font-weight:800; border-radius:4px; padding:1px 7px; margin-right:6px; vertical-align:1px; }
+  .t-error { background:#b91c1c; color:#fff; } .t-warn { background:#a16207; color:#fff; } .t-note { background:#3b4a63; color:#fff; }
+  table { border-collapse:collapse; font-size:12.5px; margin-top:6px; width:100%; } td, th { border:1px solid #4a3e18; padding:3px 6px; text-align:left; font-family:ui-monospace,Menlo,monospace; vertical-align:top; word-break:break-all; }
+  th { color:#cdbf92; font-weight:600; font-family:inherit; } tr.rag td { background:#3a2512; } .scroll { overflow-x:auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Csv<span>Why</span></h1>
+  <div class="sub">Paste a CSV. CsvWhy shows how it parses, where it breaks the RFC 4180 rules, and which line to fix: stray quotes, an unclosed quote that swallows the file, ragged rows, the wrong delimiter.</div>
+  <div class="card">
+    <label>CSV text (or load a file to keep its real line endings)</label>
+    <textarea id="t" spellcheck="false"></textarea>
+    <div class="grid">
+      <div><label>Delimiter</label><select id="d"><option value="auto">Auto-detect</option><option value=",">Comma ,</option><option value=";">Semicolon ;</option><option value="&#9;">Tab</option><option value="|">Pipe |</option></select></div>
+      <div><label>Line breaks of pasted text</label><select id="e"><option value="crlf">CRLF (Windows, Excel, RFC 4180)</option><option value="lf">LF (Unix)</option></select></div>
+      <div><label>Or open a file</label><input type="file" id="f" accept=".csv,.tsv,.txt,text/csv,text/plain" style="width:100%;color:#cdbf92;font-size:13px"></div>
+    </div>
+    <div><button id="s1">Quotes not doubled</button><button id="s2">Semicolon file</button><button id="s3">Ragged and blank</button><button id="s4">Valid</button><button id="s5">Unclosed quote</button></div>
+    <div id="err" class="err" style="margin-top:6px"></div>
+  </div>
+  <div class="card"><div id="out"></div></div>
+  <div class="note">Follows RFC 4180 (read in full). Rows are read the way Python's csv module reads them, and the result was compared with it on thousands of random inputs; the RFC grammar check was compared with its ABNF turned into a regular expression. Non-ASCII text is accepted (the RFC allows other charsets). Nothing is uploaded; it all runs in your browser.</div>
+</div>
+<script src="engine.js"></script>
+<script>
+(function () {
+  var C = window.CsvWhy, $ = function (i) { return document.getElementById(i); }, raw = null;
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  function vis(s) { return esc(s.replace(/\r\n/g, '\u21b5').replace(/[\r\n]/g, '\u21b5').replace(/\t/g, '\u2192')); }
+  var S = {
+    s1: ['id,name,note\n1,Ann,"likes tea"\n2,Bob,"said "hi" to me"\n3,Cy,ok\n', 'crlf'],
+    s2: ['name;price\nTea;3,50\nCoffee;4,20\n', 'crlf'],
+    s3: ['a,b,c\n1,2,3\n\n4,5\n6,7,8,9\n', 'crlf'],
+    s4: ['name,quote\n"Smith, J","He said ""hi"""\nLee,plain\n', 'crlf'],
+    s5: ['id,note\n1,"never closed\n2,fine\n3,fine\n', 'crlf']
+  };
+  Object.keys(S).forEach(function (k) { $(k).onclick = function () { raw = null; $('t').value = S[k][0]; $('e').value = S[k][1]; $('d').value = 'auto'; run(); }; });
+  $('f').onchange = function () {
+    var f = this.files[0]; if (!f) return;
+    if (f.size > 2000000) { $('err').textContent = 'Files up to 2 MB.'; return; }
+    var r = new FileReader(); r.onload = function () { raw = String(r.result); $('t').value = raw; run(); }; r.readAsText(f);
+  };
+  function run() {
+    var o = $('out'); $('err').textContent = '';
+    var text = raw !== null ? raw : $('t').value.replace(/\r?\n/g, $('e').value === 'crlf' ? '\r\n' : '\n');
+    if (!text.length) { $('err').textContent = 'Paste some CSV first.'; o.innerHTML = ''; return; }
+    var dsel = $('d').value, d = dsel === 'auto' ? C.guessDelimiter(text) : dsel;
+    var p = C.parse(text, d), h = '';
+    var errs = p.issues.filter(function (i) { return i.sev === 'error'; }).length;
+    h += '<div class="verdict ' + (errs ? 'bad' : 'good') + '">' + (errs ? 'Breaks RFC 4180 (' + errs + ' problem type' + (errs > 1 ? 's' : '') + ')' : 'Valid RFC 4180 syntax') + '</div>';
+    h += '<div class="muted">Delimiter: ' + (d === '\t' ? 'tab' : esc(d)) + (dsel === 'auto' ? ' (auto-detected)' : '') + (d !== ',' ? ' (the RFC itself only defines comma)' : '') + ' &middot; ' + p.rows.length + ' record' + (p.rows.length === 1 ? '' : 's') + ' &middot; ' + p.columns + ' column' + (p.columns === 1 ? '' : 's') + ' in the first row' + (raw !== null ? ' &middot; real file line endings' : '') + '</div>';
+    if (p.columns === 1 && dsel === 'auto' && p.rows.length > 1) h += '<div class="iss"><span class="tag t-warn">warn</span>Only one column found. If this should have several, the delimiter may be something this tool does not know.</div>';
+    p.issues.forEach(function (i) { h += '<div class="iss"><span class="tag t-' + i.sev + '">' + i.sev + '</span>' + (i.line ? 'Line ' + i.line + ': ' : '') + esc(i.msg) + '</div>'; });
+    if (!p.issues.length) h += '<div class="iss muted">No problems found.</div>';
+    h += '<div class="k muted" style="margin-top:10px">How it parses (first 40 records, line break inside a field shown as \u21b5)</div><div class="scroll"><table><tr><th>line</th><th>fields</th><th>values</th></tr>';
+    p.rows.slice(0, 40).forEach(function (r) {
+      var bad = r.fields.length && r.fields.length !== p.columns;
+      h += '<tr' + (bad ? ' class="rag"' : '') + '><td>' + r.line + '</td><td>' + r.fields.length + '</td><td>' + (r.fields.length ? r.fields.map(function (x) { return '[' + vis(x.length > 60 ? x.slice(0, 60) + '\u2026' : x) + ']'; }).join(' ') : '<i>blank line</i>') + '</td></tr>';
+    });
+    h += '</table></div>';
+    o.innerHTML = h;
+  }
+  $('t').oninput = function () { raw = null; run(); }; $('d').onchange = run; $('e').onchange = run;
+  $('s1').onclick();
+})();
+</script>
+</body>
+</html>
